@@ -1,39 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-us">
   <head>
-    <title></title>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="js/4399.z.js"></script>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Subway Surfers: San Francisco</title>
+    <style>
+      body { margin: 0; background-color: #231F20; width: 100vw; height: 100vh; overflow: hidden; }
+      #unityContainer { width: 100%; height: 100%; }
+    </style>
+    <!-- 引入你仓库里本来就有的官方 UnityLoader -->
+    <script src="UnityLoader.2019.2.js"></script>
     <script>
-      window.config = {
-        loader: "unity",
-        debug: false,
-        maxRatio: 16 / 9,
-        minRatio: 9 / 16,
-
-        title: "Subway Surfers: San Francisco",
-
-        unityVersion: "2019.4.18f1",
-        unityWebglBuildUrl: "Build/SanFrancisco/SanFrancisco.json",
-
-        fileSize: 35,
-        cachedDecompressedFileSizes: {
-          "SanFrancisco.asm.code.unityweb": 9077143,
-          "SanFrancisco.asm.framework.unityweb": 86369,
-          "SanFrancisco.asm.memory.unityweb": 951447,
-          "SanFrancisco.data.unityweb": 18323917,
-          "SanFrancisco.wasm.code.unityweb": 7279617,
-          "SanFrancisco.wasm.framework.unityweb": 90693,
-        },
-      };
+      // 直接绕过第 3 方加载器，让官方 Unity 引擎直接去读 JSON
+      var unityInstance = UnityLoader.instantiate("unityContainer", "Build/SanFrancisco/SanFrancisco.json");
     </script>
-    <script src="js/gamepog.bundle.js"></script>
   </head>
-<body style="width: 700px; height: 500px;">
-
-    <script src="js/master-loader.js"></script>
- 
-<script type="text/javascript" src="rate.js"></script>
+  <body>
+    <div id="unityContainer"></div>
   </body>
 </html>
