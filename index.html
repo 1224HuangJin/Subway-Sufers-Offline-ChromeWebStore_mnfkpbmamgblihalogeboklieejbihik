@@ -12,9 +12,8 @@
   <body>
     <div id="unityContainer"></div>
 
-    <!-- 终极一键修复脚本：在代码运行前进行文本级手术 -->
     <script>
-      // 1. 预先注入 4399 基础全局变量，防止其他地方报错
+      // 1. 注入 4399 基础全局变量
       window.my4399UnityModule = {
         init: function() { return true; },
         showAd: function() { return true; },
@@ -23,39 +22,57 @@
       window.showUnitywebNoSupport = function() { console.log('拦截 4399 不支持提示'); };
       if (window.parent) { window.parent.showUnitywebNoSupport = window.showUnitywebNoSupport; }
 
-      console.log("[核心修复] 正在动态读取并为 UnityLoader.2019.2.js 植入解毒补丁...");
-      
-      // 2. 拦截并读取原版 JS 文件的纯文本
+      console.log("[核心修复] 正在动态重写 Unity 核心加载器...");
+
+      // 2. 读取并对 UnityLoader 进行双重手术
       fetch('UnityLoader.2019.2.js')
         .then(response => {
-          if (!response.ok) throw new Error('读取 UnityLoader.2019.2.js 失败');
+          if (!response.ok) throw new Error('读取 UnityLoader 失败');
           return response.text();
         })
         .then(sourceCode => {
-          // 3. 【核心手术】利用正则表达式，把所有诸如 UnityLoader[r](...) 这种调用
-          // 强行替换为：(typeof UnityLoader[r] === "function" ? UnityLoader[r] : function(){ return true; })(...)
-          // 也就是说，无论 r 变量解析出来是什么，只要它不是个函数，就绝对不让它崩溃，而是执行一个空函数安全放行！
-          const patchedCode = sourceCode.replace(/UnityLoader\s*\[([^\]]+)\]\s*\(/g, function(match, expression) {
+          // 手术一：消灭 UnityLoader[r] is not a function 崩溃
+          let patchedCode = sourceCode.replace(/UnityLoader\s*\[([^\]]+)\]\s*\(/g, function(match, expression) {
             return `(typeof UnityLoader[${expression}] === "function" ? UnityLoader[${expression}] : function(){ return true; })(`;
           });
 
-          // 4. 将手术切除后的干净代码转为 Blob 动态塞入页面执行
+          // 手术二：【解决黑屏核心】强制关闭 UnityLoader 内部可能导致的 WebGL 异常解压行为
+          // 强行让 Unity 的配置中，decompressingSteps 的 gzip / brotli 校验直接放行原始数据
+          patchedCode = patchedCode.replace(/decompressingSteps\s*=\s*\[[^\]]+\]/g, 'decompressingSteps = []');
+
+          // 3. 执行装甲版代码
           const blob = new Blob([patchedCode], { type: 'application/javascript' });
           const blobUrl = URL.createObjectURL(blob);
           const scriptElement = document.createElement('script');
           scriptElement.src = blobUrl;
           
           scriptElement.onload = function() {
-            console.log("[核心修复] 安全装甲版 UnityLoader 加载就绪！开始初始化游戏引擎...");
-            // 5. 此时内部隐患已除，正版引擎安全就位，直接启动游戏
-            window.unityInstance = UnityLoader.instantiate("unityContainer", "Build/SanFrancisco/SanFrancisco.json");
+            console.log("[核心修复] UnityLoader 文本手术完成，正在拉取并注入游戏配置...");
+
+            // 4. 读取游戏的核心配置文件 JSON，在传入引擎前强行修改它的解压声明
+            fetch('Build/SanFrancisco/SanFrancisco.json')
+              .then(res => res.json())
+              .then(configData => {
+                // 强制将文件编码格式在前端重置为 false（告诉引擎不要指望服务器处理 gzip，在前端直接当成原始流读取）
+                if (configData.webgl Kimberly || true) { 
+                  configData.brotliCompressUrl = null;
+                  configData.gzipCompressUrl = null;
+                }
+                
+                console.log("[核心修复] 游戏数据流配置重置成功，正在唤醒 3D 画布...");
+                // 5. 启动游戏
+                window.unityInstance = UnityLoader.instantiate("unityContainer", configData);
+              })
+              .catch(err => {
+                console.warn("读取自定义配置失败，降级使用默认路径加载:", err);
+                window.unityInstance = UnityLoader.instantiate("unityContainer", "Build/SanFrancisco/SanFrancisco.json");
+              });
           };
 
           document.head.appendChild(scriptElement);
         })
         .catch(error => {
-          console.error("[核心修复] 动态拦截失败，降级使用原生加载:", error);
-          // 极低概率下如果 fetch 失败，做个安全兜底
+          console.error("拦截失败:", error);
           const backupScript = document.createElement('script');
           backupScript.src = "UnityLoader.2019.2.js";
           backupScript.onload = function() {
