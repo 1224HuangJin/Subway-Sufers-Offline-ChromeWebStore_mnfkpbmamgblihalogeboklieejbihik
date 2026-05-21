@@ -2,116 +2,48 @@
 <html lang="en-us">
   <head>
     <meta charset="utf-8">
-<script>
-  // 1. 完美伪造 4399 游戏接口对象
-  window.my4399UnityModule = new Proxy({}, {
-    get: function(target, prop) {
-      return function() { return true; };
-    }
-  });
-
-  // 2. 拦截并伪造不兼容提示
-  window.showUnitywebNoSupport = function() {
-    console.warn("[4399 Mock] 游戏试图触发不支持提示，已拦截。");
-  };
-  if (window.parent) {
-    window.parent.showUnitywebNoSupport = window.showUnitywebNoSupport;
-  }
-
-  // 3. ✨ 聪明的 UnityLoader 护盾
-  // 先创建一个空对象占位，但通过 Proxy 让它兼容原生方法
-  if (!window.UnityLoader) {
-    window.UnityLoader = {};
-  }
-  
-  window.UnityLoader = new Proxy(window.UnityLoader, {
-    get: function(target, prop) {
-      // 核心修正：如果游戏调用的是 instantiate，但此时真正的 UnityLoader 还没加载好
-      // 我们不能返回空函数，而是必须返回一个“中转站”，等真正的脚本加载好了再执行它
-      if (prop === 'instantiate') {
-        return function(container, dataUrl, options) {
-          // 延迟检测：如果原版的 instantiate 已经加载进来了，就执行原版
-          if (target && typeof target._original_instantiate === 'function') {
-            return target._original_instantiate(container, dataUrl, options);
-          } else if (target && typeof target[prop] === 'function' && target[prop] !== this) {
-            return target[prop](container, dataUrl, options);
-          }
-          console.log("[UnityLoader Mock] 正在等待真实的 UnityLoader.js 加载...");
-        };
-      }
-
-      // 如果本体里确实有这个方法（说明真正的 UnityLoader.js 已经加载完了）
-      if (prop in target) {
-        return target[prop];
-      }
-
-      // 4399 的魔改方法白名单拦截：只有当调用的不是 Unity 官方已知关键方法时，才返回空函数
-      const unityCoreMethods = ['compatibilityCheck', 'SystemInfo', 'allowNavs'];
-      if (unityCoreMethods.includes(prop)) {
-        return undefined; // 让它走原生未定义的逻辑
-      }
-
-      // 只有其它奇奇怪怪的 4399 动态方法，才给它返回空函数防止崩溃
-      return function() { 
-        console.log(`[UnityLoader Mock] 放行魔改调用: UnityLoader.${String(prop)}`);
-        return true; 
-      };
-    },
-    set: function(target, prop, value) {
-      // 当真正的 UnityLoader.js 加载时，它会试图把真正的 instantiate 写入进来
-      if (prop === 'instantiate') {
-        target._original_instantiate = value; // 悄悄存下正版方法
-      }
-      target[prop] = value;
-      return true;
-    }
-  });
-</script>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Subway Surfers: San Francisco</title>
     <style>
       body { margin: 0; background-color: #231F20; width: 100vw; height: 100vh; overflow: hidden; }
       #unityContainer { width: 100%; height: 100%; }
     </style>
-    <!-- 引入你仓库里本来就有的官方 UnityLoader -->
-<!-- 1. 首先确保加载正版的 Unity 加载器 -->
-<script src="UnityLoader.2019.2.js"></script>
 
-<!-- 2. 在这里精准注入补丁 -->
-<script>
-  // 补丁 A：伪造 4399 接口
-  window.my4399UnityModule = {
-    init: function() { return true; },
-    showAd: function() { return true; },
-    log: function() { return true; }
-  };
-  
-  window.showUnitywebNoSupport = function() { console.log('拦截不支持提示'); };
-  if (window.parent) { window.parent.showUnitywebNoSupport = window.showUnitywebNoSupport; }
+    <!-- 1. 首先让浏览器纯净地加载官方的 UnityLoader.js -->
+    <script src="UnityLoader.2019.2.js"></script>
 
-  // 补丁 B：精准修复 UnityLoader[r] is not a function 崩溃
-  // 既然原魔改脚本会动态调用 UnityLoader[某个变量]，我们就把可能被调用的空函数全挂上去
-  if (window.UnityLoader) {
-    // 动态支持任意未知属性的调用，且不破坏原有的 instantiate
-    const originalInstantiate = window.UnityLoader.instantiate;
-    
-    // 利用简单的 getter 兜底，只要不是原生方法，全给它返回空函数
-    window.UnityLoader = new Proxy(window.UnityLoader, {
-      get: function(target, prop) {
-        if (prop in target) {
-          return target[prop];
-        }
-        // 专门应付 4399 魔改调用的空函数
-        return function() { 
-          console.log(`[补丁成功] 自动放行了魔改调用: UnityLoader.${String(prop)}`);
-          return true; 
-        };
-      }
-    });
-  }
-</script>
+    <!-- 2. 当官方脚本加载完毕后，我们在这里注入精准的 4399 修复补丁 -->
     <script>
-      // 直接绕过第 3 方加载器，让官方 Unity 引擎直接去读 JSON
+      // 补丁 A：伪造 4399 接口，防止因缺少全局变量而崩溃
+      window.my4399UnityModule = {
+        init: function() { return true; },
+        showAd: function() { return true; },
+        log: function() { return true; }
+      };
+      
+      window.showUnitywebNoSupport = function() { console.log('拦截 4399 不支持提示'); };
+      if (window.parent) { window.parent.showUnitywebNoSupport = window.showUnitywebNoSupport; }
+
+      // 补丁 B：通过 Proxy 保护 UnityLoader 不被 4399 魔改动态调用带崩
+      if (window.UnityLoader) {
+        window.UnityLoader = new Proxy(window.UnityLoader, {
+          get: function(target, prop) {
+            // 如果是原版 Unity 本身就持有的关键方法 (如 instantiate)，直接返回原版
+            if (prop in target) {
+              return target[prop];
+            }
+            // 只要不是原版持有的方法（也就是 4399 强行插入的动态垃圾调用），自动用空函数打发它
+            return function() { 
+              console.log(`[补丁成功] 自动放行了魔改调用: UnityLoader.${String(prop)}`);
+              return true; 
+            };
+          }
+        });
+      }
+    </script>
+
+    <!-- 3. 核心正版引擎安全就位，开始加载游戏资源 JSON -->
+    <script>
       var unityInstance = UnityLoader.instantiate("unityContainer", "Build/SanFrancisco/SanFrancisco.json");
     </script>
   </head>
