@@ -24,7 +24,7 @@
 
       console.log("[核心修复] 正在动态重写 Unity 核心加载器...");
 
-      // 2. 读取并对 UnityLoader 进行双重手术
+      // 2. 读取并对 UnityLoader 进行双重文本手术
       fetch('UnityLoader.2019.2.js')
         .then(response => {
           if (!response.ok) throw new Error('读取 UnityLoader 失败');
@@ -36,11 +36,10 @@
             return `(typeof UnityLoader[${expression}] === "function" ? UnityLoader[${expression}] : function(){ return true; })(`;
           });
 
-          // 手术二：【解决黑屏核心】强制关闭 UnityLoader 内部可能导致的 WebGL 异常解压行为
-          // 强行让 Unity 的配置中，decompressingSteps 的 gzip / brotli 校验直接放行原始数据
+          // 手术二：强制关闭 UnityLoader 内部可能导致的 WebGL 异常解压行为
           patchedCode = patchedCode.replace(/decompressingSteps\s*=\s*\[[^\]]+\]/g, 'decompressingSteps = []');
 
-          // 3. 执行装甲版代码
+          // 3. 将修复好的代码转为 Blob 注入执行
           const blob = new Blob([patchedCode], { type: 'application/javascript' });
           const blobUrl = URL.createObjectURL(blob);
           const scriptElement = document.createElement('script');
@@ -49,15 +48,13 @@
           scriptElement.onload = function() {
             console.log("[核心修复] UnityLoader 文本手术完成，正在拉取并注入游戏配置...");
 
-            // 4. 读取游戏的核心配置文件 JSON，在传入引擎前强行修改它的解压声明
+            // 4. 读取并动态修正配置文件 JSON 的数据流声明
             fetch('Build/SanFrancisco/SanFrancisco.json')
               .then(res => res.json())
               .then(configData => {
-                // 强制将文件编码格式在前端重置为 false（告诉引擎不要指望服务器处理 gzip，在前端直接当成原始流读取）
-                if (configData.webgl Kimberly || true) { 
-                  configData.brotliCompressUrl = null;
-                  configData.gzipCompressUrl = null;
-                }
+                // 【已修正笔误】彻底移除无意义标识符，强制将压缩路径清空，让引擎按原生未压缩流读取
+                configData.brotliCompressUrl = null;
+                configData.gzipCompressUrl = null;
                 
                 console.log("[核心修复] 游戏数据流配置重置成功，正在唤醒 3D 画布...");
                 // 5. 启动游戏
