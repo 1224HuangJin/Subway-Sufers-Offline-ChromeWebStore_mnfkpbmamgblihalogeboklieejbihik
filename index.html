@@ -74,7 +74,42 @@
       #unityContainer { width: 100%; height: 100%; }
     </style>
     <!-- 引入你仓库里本来就有的官方 UnityLoader -->
-    <script src="UnityLoader.2019.2.js"></script>
+<!-- 1. 首先确保加载正版的 Unity 加载器 -->
+<script src="UnityLoader.2019.2.js"></script>
+
+<!-- 2. 在这里精准注入补丁 -->
+<script>
+  // 补丁 A：伪造 4399 接口
+  window.my4399UnityModule = {
+    init: function() { return true; },
+    showAd: function() { return true; },
+    log: function() { return true; }
+  };
+  
+  window.showUnitywebNoSupport = function() { console.log('拦截不支持提示'); };
+  if (window.parent) { window.parent.showUnitywebNoSupport = window.showUnitywebNoSupport; }
+
+  // 补丁 B：精准修复 UnityLoader[r] is not a function 崩溃
+  // 既然原魔改脚本会动态调用 UnityLoader[某个变量]，我们就把可能被调用的空函数全挂上去
+  if (window.UnityLoader) {
+    // 动态支持任意未知属性的调用，且不破坏原有的 instantiate
+    const originalInstantiate = window.UnityLoader.instantiate;
+    
+    // 利用简单的 getter 兜底，只要不是原生方法，全给它返回空函数
+    window.UnityLoader = new Proxy(window.UnityLoader, {
+      get: function(target, prop) {
+        if (prop in target) {
+          return target[prop];
+        }
+        // 专门应付 4399 魔改调用的空函数
+        return function() { 
+          console.log(`[补丁成功] 自动放行了魔改调用: UnityLoader.${String(prop)}`);
+          return true; 
+        };
+      }
+    });
+  }
+</script>
     <script>
       // 直接绕过第 3 方加载器，让官方 Unity 引擎直接去读 JSON
       var unityInstance = UnityLoader.instantiate("unityContainer", "Build/SanFrancisco/SanFrancisco.json");
