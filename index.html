@@ -6,10 +6,7 @@
   // 1. 完美伪造 4399 游戏接口对象
   window.my4399UnityModule = new Proxy({}, {
     get: function(target, prop) {
-      return function() { 
-        console.log(`[4399 Mock] 拦截了对 4399 方法 ${prop} 的调用`);
-        return true; 
-      };
+      return function() { return true; };
     }
   });
 
@@ -21,23 +18,50 @@
     window.parent.showUnitywebNoSupport = window.showUnitywebNoSupport;
   }
 
-  // 3. ✨核心修复：为全局 UnityLoader 对象注入防崩溃代理
-  // 无论代码通过 UnityLoader[r] 调用什么奇怪的方法，都直接返回一个空函数，防止抛出 TypeError
+  // 3. ✨ 聪明的 UnityLoader 护盾
+  // 先创建一个空对象占位，但通过 Proxy 让它兼容原生方法
   if (!window.UnityLoader) {
     window.UnityLoader = {};
   }
   
   window.UnityLoader = new Proxy(window.UnityLoader, {
     get: function(target, prop) {
-      // 如果原本就有这个属性/方法（比如原生 Unity 核心方法），直接返回原版
+      // 核心修正：如果游戏调用的是 instantiate，但此时真正的 UnityLoader 还没加载好
+      // 我们不能返回空函数，而是必须返回一个“中转站”，等真正的脚本加载好了再执行它
+      if (prop === 'instantiate') {
+        return function(container, dataUrl, options) {
+          // 延迟检测：如果原版的 instantiate 已经加载进来了，就执行原版
+          if (target && typeof target._original_instantiate === 'function') {
+            return target._original_instantiate(container, dataUrl, options);
+          } else if (target && typeof target[prop] === 'function' && target[prop] !== this) {
+            return target[prop](container, dataUrl, options);
+          }
+          console.log("[UnityLoader Mock] 正在等待真实的 UnityLoader.js 加载...");
+        };
+      }
+
+      // 如果本体里确实有这个方法（说明真正的 UnityLoader.js 已经加载完了）
       if (prop in target) {
         return target[prop];
       }
-      // 如果没有（比如被魔改出来的 4399 特有属性），动态返回一个空函数，确保不崩溃
-      console.log(`[UnityLoader Mock] 拦截并放行了不存在的动态调用: UnityLoader.${String(prop)}`);
-      return function() { return true; };
+
+      // 4399 的魔改方法白名单拦截：只有当调用的不是 Unity 官方已知关键方法时，才返回空函数
+      const unityCoreMethods = ['compatibilityCheck', 'SystemInfo', 'allowNavs'];
+      if (unityCoreMethods.includes(prop)) {
+        return undefined; // 让它走原生未定义的逻辑
+      }
+
+      // 只有其它奇奇怪怪的 4399 动态方法，才给它返回空函数防止崩溃
+      return function() { 
+        console.log(`[UnityLoader Mock] 放行魔改调用: UnityLoader.${String(prop)}`);
+        return true; 
+      };
     },
     set: function(target, prop, value) {
+      // 当真正的 UnityLoader.js 加载时，它会试图把真正的 instantiate 写入进来
+      if (prop === 'instantiate') {
+        target._original_instantiate = value; // 悄悄存下正版方法
+      }
       target[prop] = value;
       return true;
     }
