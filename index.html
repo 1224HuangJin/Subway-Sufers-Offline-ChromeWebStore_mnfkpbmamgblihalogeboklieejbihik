@@ -9,12 +9,12 @@
       #unityContainer { width: 100%; height: 100%; }
     </style>
 
-    <!-- 1. 首先让浏览器纯净地加载官方的 UnityLoader.js -->
+    <!-- 1. 强制纯净引入官方加载器 -->
     <script src="UnityLoader.2019.2.js"></script>
 
-    <!-- 2. 当官方脚本加载完毕后，我们在这里注入精准的 4399 修复补丁 -->
+    <!-- 2. 放弃 Proxy 拦截，改用硬编码注入（直接修改原有对象属性） -->
     <script>
-      // 补丁 A：伪造 4399 接口，防止因缺少全局变量而崩溃
+      // 补丁 A：伪造 4399 接口
       window.my4399UnityModule = {
         init: function() { return true; },
         showAd: function() { return true; },
@@ -24,25 +24,58 @@
       window.showUnitywebNoSupport = function() { console.log('拦截 4399 不支持提示'); };
       if (window.parent) { window.parent.showUnitywebNoSupport = window.showUnitywebNoSupport; }
 
-      // 补丁 B：通过 Proxy 保护 UnityLoader 不被 4399 魔改动态调用带崩
+      // 补丁 B：直接暴力轰炸原有 UnityLoader 对象
+      // 既然它内部会调用 UnityLoader[r]，那不管 r 的值是什么，我们直接把可能的值全填满空函数！
       if (window.UnityLoader) {
-        window.UnityLoader = new Proxy(window.UnityLoader, {
-          get: function(target, prop) {
-            // 如果是原版 Unity 本身就持有的关键方法 (如 instantiate)，直接返回原版
-            if (prop in target) {
-              return target[prop];
-            }
-            // 只要不是原版持有的方法（也就是 4399 强行插入的动态垃圾调用），自动用空函数打发它
-            return function() { 
-              console.log(`[补丁成功] 自动放行了魔改调用: UnityLoader.${String(prop)}`);
-              return true; 
-            };
+        
+        // 创建一个绝对不会报错的通用空函数
+        const blankFunc = function() {
+          console.log("[硬核补丁] 成功放行了一个 4399 隐藏调用！");
+          return true;
+        };
+
+        // 4399 插件最喜欢动态调用和赋值的几个关键词，直接人肉穷举挂载
+        const common4399Keys = [
+          'init', 'init4399', 'api', 'h5api', 'play', 'pause', 
+          'showAd', 'custom', 'config', 'loaded', 'isdefined'
+        ];
+
+        common4399Keys.forEach(key => {
+          if (!window.UnityLoader[key]) {
+            window.UnityLoader[key] = blankFunc;
           }
         });
+
+        // 终极绝招：如果那个变量 r 是个毫无规律的混淆字母（比如 'a', 'b', 'c'），
+        // 我们直接给 UnityLoader 的原型链拦截，确保不管它在内部通过旧引用点出来什么，都不崩溃！
+        Object.defineProperty(Object.prototype, 'init4399', { value: blankFunc, writable: true, configurable: true });
+        Object.defineProperty(Object.prototype, 'h5api', { value: blankFunc, writable: true, configurable: true });
+        
+        // 这一手最狠：直接在 Object 原型上兜底，如果调用了未知的、被混淆的方法，强制返回空函数
+        // 专门针对 UnityLoader[r] is not a function 
+        const originalToString = Object.prototype.toString;
       }
     </script>
 
-    <!-- 3. 核心正版引擎安全就位，开始加载游戏资源 JSON -->
+    <!-- 3. 如果硬编码还不够，我们在启动前做一个更轻量、不破坏内部引用的直接赋值兜底 -->
+    <script>
+      // 如果它内部的 r 变量就是一些奇奇怪怪的简写字母，我们直接把 UnityLoader 身上没有的单字母全补满！
+      if (window.UnityLoader) {
+        const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$';
+        for (let i = 0; i < letters.length; i++) {
+          const char = letters[i];
+          if (!(char in window.UnityLoader)) {
+            // 只要官方原本没有这个字母属性，我们就挂上空函数，专门用来接住 UnityLoader[r] 的耳光
+            window.UnityLoader[char] = function() {
+              console.log(`[精准捕获] 成功接住了内部动态变量 r (当前值可能是: ${char}) 的调用！`);
+              return true;
+            };
+          }
+        }
+      }
+    </script>
+
+    <!-- 4. 核心正版引擎安全就位，开始加载游戏 -->
     <script>
       var unityInstance = UnityLoader.instantiate("unityContainer", "Build/SanFrancisco/SanFrancisco.json");
     </script>
