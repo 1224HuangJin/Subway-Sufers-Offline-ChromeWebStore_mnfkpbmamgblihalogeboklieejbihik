@@ -2,27 +2,46 @@
 <html lang="en-us">
   <head>
     <meta charset="utf-8">
-    <script>
+<script>
   // 1. 完美伪造 4399 游戏接口对象
-  // 使用 Proxy 可以确保无论游戏调用 my4399UnityModule 内部的任何方法，都统统返回一个空函数，绝对不报错
   window.my4399UnityModule = new Proxy({}, {
     get: function(target, prop) {
       return function() { 
-        console.log(`[4399 Mock] 拦截并放行了对方法 ${prop} 的调用`);
+        console.log(`[4399 Mock] 拦截了对 4399 方法 ${prop} 的调用`);
         return true; 
       };
     }
   });
 
-  // 2. 伪造 4399 的浏览器不兼容提示函数
+  // 2. 拦截并伪造不兼容提示
   window.showUnitywebNoSupport = function() {
     console.warn("[4399 Mock] 游戏试图触发不支持提示，已拦截。");
   };
-
-  // 3. 确保外层框架和子框架都能访问到该函数
   if (window.parent) {
     window.parent.showUnitywebNoSupport = window.showUnitywebNoSupport;
   }
+
+  // 3. ✨核心修复：为全局 UnityLoader 对象注入防崩溃代理
+  // 无论代码通过 UnityLoader[r] 调用什么奇怪的方法，都直接返回一个空函数，防止抛出 TypeError
+  if (!window.UnityLoader) {
+    window.UnityLoader = {};
+  }
+  
+  window.UnityLoader = new Proxy(window.UnityLoader, {
+    get: function(target, prop) {
+      // 如果原本就有这个属性/方法（比如原生 Unity 核心方法），直接返回原版
+      if (prop in target) {
+        return target[prop];
+      }
+      // 如果没有（比如被魔改出来的 4399 特有属性），动态返回一个空函数，确保不崩溃
+      console.log(`[UnityLoader Mock] 拦截并放行了不存在的动态调用: UnityLoader.${String(prop)}`);
+      return function() { return true; };
+    },
+    set: function(target, prop, value) {
+      target[prop] = value;
+      return true;
+    }
+  });
 </script>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Subway Surfers: San Francisco</title>
